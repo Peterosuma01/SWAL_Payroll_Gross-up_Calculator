@@ -1,0 +1,21 @@
+{
+  "name": "SWAL Payroll Gross-Up Calculator",
+  "short_name": "SWAL Payroll",
+  "description": "Calculate grossed-up salaries for SWAL payroll with salary advances",
+  "start_url": "/swal-payroll-calculator/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#16a34a",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192x192/16a34a/ffffff?text=SWAL",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://via.placeholder.com/512x512/16a34a/ffffff?text=SWAL",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
