@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SWAL Payroll Gross-Up Calculator - Calculate grossed-up salaries with salary advances">
+  <meta name="theme-color" content="#16a34a">
+  <title>SWAL Payroll Gross-Up Calculator</title>
+  <link rel="manifest" href="manifest.json">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Load React FIRST before our code -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/swal-payroll-calculator/service-worker.js')
+          .then(reg => console.log('Service Worker registered'))
+          .catch(err => console.log('Service Worker registration failed'));
+      });
+    }
+
+    // Wait for page to load
+    window.addEventListener('DOMContentLoaded', function() {
+      const { createElement: e, useState, useEffect } = React;
+
+      function Calculator() {
+        const [currentGrossSalary, setCurrentGrossSalary] = useState(40000);
+        const [transportAllowance, setTransportAllowance] = useState(11200);
+        const [grossedUpSalary, setGrossedUpSalary] = useState(0);
+        const [targetNetPay, setTargetNetPay] = useState(0);
+
+        const calculatePAYE = (taxableIncome) => {
+          let tax = 0;
+          
+          if (taxableIncome <= 24000) {
+            tax = taxableIncome * 0.10;
+          } else if (taxableIncome <= 32333) {
+            tax = 24000 * 0.10 + (taxableIncome - 24000) * 0.25;
+          } else {
+            tax = 24000 * 0.10 + (32333 - 24000) * 0.25 + (taxableIncome - 32333) * 0.30;
+          }
+          
+          const personalRelief = 2400;
+          return Math.max(0, tax - personalRelief);
+        };
+
+        const calculateCurrentScenario = (grossPay) => {
+          // Step 1: Calculate statutory deductions (NSSF, SHA, Housing Levy)
+          const nssf = grossPay * 0.06;
+          const sha = grossPay * 0.0275;
+          const housingLevy = grossPay * 0.015;
+          
+          // Step 2: Calculate taxable income (Gross - Statutory Deductions)
+          const taxableIncome = grossPay - nssf - sha - housingLevy;
+          
+          // Step 3: Calculate PAYE on taxable income
+          const paye = calculatePAYE(taxableIncome);
+          
+          // Step 4: Calculate net pay
+          const totalDeductions = nssf + sha + housingLevy + paye;
+          const netPay = grossPay - totalDeductions;
+          
+          return {
+            grossPay,
+            nssf,
+            sha,
+            housingLevy,
+            taxableIncome,
+            paye,
+            totalDeductions,
+            netPay,
+            transportAllowance: 0
+          };
+        };
+
+        const calculateNewScenario = (grossPay, transport) => {
+          // Step 1: Calculate statutory deductions (NSSF, SHA, Housing Levy)
+          const nssf = grossPay * 0.06;
+          const sha = grossPay * 0.0275;
+          const housingLevy = grossPay * 0.015;
+          
+          // Step 2: Calculate taxable income INCLUDING transport allowance
+          // Taxable = Gross - Statutory Deductions (transport is TAXABLE)
+          const taxableIncome = grossPay - nssf - sha - housingLevy;
+          
+          // Step 3: Calculate PAYE on taxable income (which includes transport component)
+          const paye = calculatePAYE(taxableIncome);
+          
+          // Step 4: Calculate net pay (deduct transport allowance separately)
+          const totalDeductions = nssf + sha + housingLevy + paye + transport;
+          const netPay = grossPay - totalDeductions;
+          
+          return {
+            grossPay,
+            nssf,
+            sha,
+            housingLevy,
+            taxableIncome,
+            paye,
+            transportAllowance: transport,
+            totalDeductions,
+            netPay
+          };
+        };
+
+        const calculateGrossUp = () => {
+          // Get target net pay from current structure
+          const current = calculateCurrentScenario(currentGrossSalary);
+          setTargetNetPay(current.netPay);
+          
+          // Find grossed-up salary where net pay matches even after adding transport
+          let low = currentGrossSalary;
+          let high = currentGrossSalary * 3;
+          let iterations = 0;
+          let bestGross = currentGrossSalary;
+          let bestDiff = Infinity;
+          
+          while (iterations < 300 && high - low > 0.01) {
+            const mid = (low + high) / 2;
+            const calc = calculateNewScenario(mid, transportAllowance);
+            const diff = Math.abs(calc.netPay - current.netPay);
+            
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              bestGross = mid;
+            }
+            
+            if (diff < 0.01) {
+              bestGross = mid;
+              break;
+            }
+            
+            if (calc.netPay < current.netPay) {
+              low = mid;
+            } else {
+              high = mid;
+            }
+            
+            iterations++;
+          }
+          
+          setGrossedUpSalary(Math.round(bestGross * 100) / 100);
+        };
+
+        useEffect(() => {
+          calculateGrossUp();
+        }, [currentGrossSalary, transportAllowance]);
+
+        const currentCalc = calculateCurrentScenario(currentGrossSalary);
+        const newCalc = calculateNewScenario(grossedUpSalary, transportAllowance);
+        const netDifference = newCalc.netPay - currentCalc.netPay;
+        const grossIncrease = grossedUpSalary - currentGrossSalary;
+
+        return e('div', { className: 'min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-6' },
+          e('div', { className: 'max-w-6xl mx-auto' },
+            e('div', { className: 'bg-white rounded-lg shadow-lg p-8 mb-6' },
+              e('div', { className: 'flex items-center gap-3 mb-6' },
+                e('svg', { className: 'w-8 h-8 text-green-600', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
+                  e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' })
+                ),
+                e('h1', { className: 'text-3xl font-bold text-gray-800' }, 'SWAL Payroll Gross-Up Calculator')
+              ),
+
+              e('div', { className: 'grid md:grid-cols-2 gap-6 mb-8' },
+                e('div', null,
+                  e('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Current Gross Salary (KES)'),
+                  e('input', {
+                    type: 'number',
+                    value: currentGrossSalary,
+                    onChange: (ev) => setCurrentGrossSalary(Number(ev.target.value)),
+                    className: 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent'
+                  }),
+                  e('p', { className: 'text-xs text-gray-500 mt-1' }, 'Current gross without transport component')
+                ),
+                e('div', null,
+                  e('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Transport Allowance (KES)'),
+                  e('input', {
+                    type: 'number',
+                    value: transportAllowance,
+                    onChange: (ev) => setTransportAllowance(Number(ev.target.value)),
+                    className: 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent'
+                  }),
+                  e('p', { className: 'text-xs text-gray-500 mt-1' }, 'Taxable allowance to be paid separately')
+                )
+              ),
+
+              e('div', { className: 'grid md:grid-cols-2 gap-6' },
+                // Current Structure Card
+                e('div', { className: 'bg-blue-50 rounded-lg p-6 border-2 border-blue-200' },
+                  e('h2', { className: 'text-xl font-bold text-blue-900 mb-4' }, 'Current Salary'),
+                  e('div', { className: 'space-y-3 text-sm' },
+                    e('div', { className: 'flex justify-between border-b-2 border-blue-300 pb-2' },
+                      e('span', { className: 'font-bold text-gray-800' }, 'Gross Pay:'),
+                      e('span', { className: 'font-bold text-blue-900' }, 'KES ' + currentCalc.grossPay.toLocaleString())
+                    ),
+                    e('div', { className: 'mt-3' },
+                      e('p', { className: 'text-xs font-semibold text-gray-700 mb-2' }, 'STATUTORY DEDUCTIONS:'),
+                      e('div', { className: 'flex justify-between text-red-600' },
+                        e('span', null, 'NSSF (6%):'),
+                        e('span', null, 'KES ' + currentCalc.nssf.toFixed(2))
+                      ),
+                      e('div', { className: 'flex justify-between text-red-600' },
+                        e('span', null, 'SHA (2.75%):'),
+                        e('span', null, 'KES ' + currentCalc.sha.toFixed(2))
+                      ),
+                      e('div', { className: 'flex justify-between text-red-600' },
+                        e('span', null, 'Housing Levy (1.5%):'),
+                        e('span', null, 'KES ' + currentCalc.housingLevy.toFixed(2))
+                      )
+                    ),
+                    e('div', { className: 'flex justify-between pt-2 border-t border-blue-200 bg-blue-100 -mx-3 px-3 py-1' },
+                      e('span', { className: 'font-medium text-gray-700' }, 'Taxable Pay:'),
+                      e('span', { className: 'font-semibold' }, 'KES ' + currentCalc.taxableIncome.toFixed(2))
+                    ),
+                    e('div', { className: 'pt-1' },
+                      e('p', { className: 'text-xs font-semibold text-gray-700 mb-2' }, 'TAX:'),
+                      e('div', { className: 'flex justify-between text-red-600' },
+                        e('span', null, 'PAYE (after KES 2,400 relief):'),
+                        e('span', null, 'KES ' + currentCalc.paye.toFixed(2))
+                      )
+                    ),
+                    e('div', { className: 'flex justify-between border-t-2 border-blue-300 pt-2 text-red-700 font-bold' },
+                      e('span', null, 'Total Deductions:'),
+                      e('span', null, 'KES ' + currentCalc.totalDeductions.toFixed(2))
+                    ),
+                    e('div', { className: 'flex justify-between border-t-2 border-blue-400 pt-2 bg-blue-100 -mx-3 px-3 py-2 rounded mt-2' },
+                      e('span', { className: 'font-bold text-gray-800' }, 'NET PAY:'),
+                      e('span', { className: 'font-bold text-blue-900 text-lg' }, 'KES ' + currentCalc.netPay.toFixed(2))
+                    )
+                  )
+                ),
+
+                // Grossed-Up Structure Card
+                e('div', { className: 'bg-green-50 rounded-lg p-6 border-2 border-green-200' },
+                  e('h2', { className: 'text-xl font-bold text-green-900 mb-4' }, 'Grossed-Up Salary'),
+                  e('div', { className: 'space-y-3 text-sm' },
+                    e('div', { className: 'flex justify-between border-b-2 border-green-300 pb-2' },
+                      e('span', { className: 'font-bold text-gray-800' }, 'Gross Pay:'),
+                      e('span', { className: 'font-bold text-green-900' }, 'KES ' + newCalc.grossPay.toLocaleString())
+                    ),
+                    e('div', { className: 'mt-3' },
+                      e('p', { className: 'text-xs font-semibold text-gray-700 mb-2' }, 'STATUTORY DEDUCTIONS:'),
+                      e('div', { className: 'flex justify-between text-red-600' },
+                        e('span', null, 'NSSF (6% of gross):'),
+                        e('span', null, 'KES ' + newCalc.nssf.toFixed(2))
+                      ),
+                      e('div', { className: 'flex justify-between text-red-600' },
+                        e('span', null, 'SHA (2.75% of gross):'),
+                        e('span', null, 'KES ' + newCalc.sha.toFixed(2))
+                      ),
+                      e('div', { className: 'flex justify-between text-red-600' },
+                        e('span', null, 'Housing Levy (1.5% of gross):'),
+                        e('span', null, 'KES ' + newCalc.housingLevy.toFixed(2))
+                      )
+                    ),
+                    e('div', { className: 'flex justify-between pt-2 border-t border-green-200 bg-green-100 -mx-3 px-3 py-1' },
+                      e('span', { className: 'font-medium text-gray-700' }, 'Taxable Pay:'),
+                      e('span', { className: 'font-semibold' }, 'KES ' + newCalc.taxableIncome.toFixed(2))
+                    ),
+                    e('div', { className: 'pt-1' },
+                      e('p', { className: 'text-xs font-semibold text-gray-700 mb-2' }, 'TAX:'),
+                      e('div', { className: 'flex justify-between text-red-600' },
+                        e('span', null, 'PAYE (after KES 2,400 relief):'),
+                        e('span', null, 'KES ' + newCalc.paye.toFixed(2))
+                      )
+                    ),
+                    e('div', { className: 'pt-2 border-t border-green-200' },
+                      e('p', { className: 'text-xs font-semibold text-gray-700 mb-2' }, 'OTHER DEDUCTIONS:'),
+                      e('div', { className: 'flex justify-between text-orange-600 font-semibold' },
+                        e('span', null, 'Salary Advance:'),
+                        e('span', null, 'KES ' + newCalc.transportAllowance.toFixed(2))
+                      )
+                    ),
+                    e('div', { className: 'flex justify-between border-t-2 border-green-300 pt-2 text-red-700 font-bold' },
+                      e('span', null, 'Total Deductions:'),
+                      e('span', null, 'KES ' + newCalc.totalDeductions.toFixed(2))
+                    ),
+                    e('div', { className: 'flex justify-between border-t-2 border-green-400 pt-2 bg-green-100 -mx-3 px-3 py-2 rounded mt-2' },
+                      e('span', { className: 'font-bold text-gray-800' }, 'NET PAY:'),
+                      e('span', { className: 'font-bold text-green-900 text-lg' }, 'KES ' + newCalc.netPay.toFixed(2))
+                    )
+                  )
+                )
+              ),
+
+              e('div', { className: 'mt-6 p-5 bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-lg' },
+                e('h3', { className: 'font-bold text-yellow-900 mb-3 text-lg' }, 'Gross-Up Solution'),
+                e('div', { className: 'grid md:grid-cols-3 gap-4' },
+                  e('div', { className: 'bg-white p-3 rounded border border-yellow-200' },
+                    e('p', { className: 'text-xs text-gray-600 mb-1' }, 'Required Gross Salary'),
+                    e('p', { className: 'text-2xl font-bold text-green-700' }, 'KES ' + grossedUpSalary.toLocaleString())
+                  ),
+                  e('div', { className: 'bg-white p-3 rounded border border-yellow-200' },
+                    e('p', { className: 'text-xs text-gray-600 mb-1' }, 'Gross Increase Needed'),
+                    e('p', { className: 'text-2xl font-bold text-blue-700' }, 'KES ' + grossIncrease.toFixed(2))
+                  ),
+                  e('div', { className: 'bg-white p-3 rounded border border-yellow-200' },
+                    e('p', { className: 'text-xs text-gray-600 mb-1' }, 'Net Pay Maintained'),
+                    e('p', { className: 'text-2xl font-bold text-purple-700' }, 'KES ' + targetNetPay.toFixed(2))
+                  )
+                ),
+                e('div', { className: 'mt-3 p-3 bg-white rounded border border-yellow-200' },
+                  e('p', { className: 'text-sm text-gray-700' },
+                    e('strong', null, 'Summary: '),
+                    'To maintain a net pay of KES ' + targetNetPay.toFixed(2) + ', increase gross salary from KES ' + 
+                    currentGrossSalary.toLocaleString() + ' to ',
+                    e('span', { className: 'text-green-700 font-bold' }, 'KES ' + grossedUpSalary.toLocaleString()),
+                    '. The transport allowance of KES ' + transportAllowance.toLocaleString() + ' is included in taxable pay (increasing PAYE) and then deducted separately.',
+                    Math.abs(netDifference) < 1 && e('span', { className: 'text-green-600 ml-2 font-semibold' }, '✓ Net Pay Match Achieved!')
+                  )
+                )
+              ),
+
+              e('div', { className: 'mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg' },
+                e('h3', { className: 'font-semibold text-blue-900 mb-2' }, 'How This Works'),
+                e('div', { className: 'text-sm text-blue-800 space-y-2' },
+                  e('p', null, e('strong', null, 'Step 1: '), 'Calculate statutory deductions: NSSF (6%), SHA (2.75%), Housing Levy (1.5%) on gross salary'),
+                  e('p', null, e('strong', null, 'Step 2: '), 'Calculate Taxable Pay = Gross - NSSF - SHA - Housing Levy (transport is PART of taxable pay)'),
+                  e('p', null, e('strong', null, 'Step 3: '), 'Calculate PAYE on Taxable Pay using tax bands: 10% (1-24K), 25% (24-32K), 30% (32K+)'),
+                  e('p', null, e('strong', null, 'Step 4: '), 'Apply personal relief of KES 2,400 to reduce PAYE'),
+                  e('p', null, e('strong', null, 'Step 5: '), 'Deduct transport allowance separately (after PAYE calculation)'),
+                  e('p', null, e('strong', null, 'Step 6: '), 'Net Pay = Gross - NSSF - SHA - Housing Levy - PAYE - Transport Allowance')
+                )
+              )
+            )
+          )
+        );
+      }
+
+      // Use createRoot for React 18
+      const container = document.getElementById('app');
+      const root = ReactDOM.createRoot(container);
+      root.render(React.createElement(Calculator));
+    });
+  </script>
+</body>
+</html>
