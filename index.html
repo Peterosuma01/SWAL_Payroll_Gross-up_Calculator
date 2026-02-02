@@ -125,13 +125,14 @@
           setTargetNetPay(current.netPay);
           
           // Find grossed-up salary where net pay matches even after adding transport
-          let low = currentGrossSalary;
-          let high = currentGrossSalary * 3;
+          // Start from a higher base to handle cases where transport > current gross
+          let low = Math.max(currentGrossSalary, transportAllowance);
+          let high = Math.max(currentGrossSalary * 4, transportAllowance * 3);
           let iterations = 0;
-          let bestGross = currentGrossSalary;
+          let bestGross = low;
           let bestDiff = Infinity;
           
-          while (iterations < 300 && high - low > 0.01) {
+          while (iterations < 500 && high - low > 0.01) {
             const mid = (low + high) / 2;
             const calc = calculateNewScenario(mid, transportAllowance);
             const diff = Math.abs(calc.netPay - current.netPay);
