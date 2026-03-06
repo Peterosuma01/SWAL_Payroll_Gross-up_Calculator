@@ -60,8 +60,10 @@
 
         const calculateCurrentScenario = (grossPay) => {
           // Step 1: Calculate statutory deductions (NSSF, SHA, Housing Levy)
-          // NSSF capped at KES 4,320 (for salaries >= 72,000)
-          const nssf = grossPay >= 72000 ? 4320 : grossPay * 0.06;
+          // NSSF calculation:
+          // - Less than 108,000: 6% of gross
+          // - 108,000 and above: Capped at KES 6,480
+          const nssf = grossPay >= 108000 ? 6480 : grossPay * 0.06;
           const sha = grossPay * 0.0275;
           const housingLevy = grossPay * 0.015;
           
@@ -90,8 +92,10 @@
 
         const calculateNewScenario = (grossPay, transport) => {
           // Step 1: Calculate statutory deductions (NSSF, SHA, Housing Levy)
-          // NSSF capped at KES 4,320 (for salaries >= 72,000)
-          const nssf = grossPay >= 72000 ? 4320 : grossPay * 0.06;
+          // NSSF calculation:
+          // - Less than 108,000: 6% of gross
+          // - 108,000 and above: Capped at KES 6,480
+          const nssf = grossPay >= 108000 ? 6480 : grossPay * 0.06;
           const sha = grossPay * 0.0275;
           const housingLevy = grossPay * 0.015;
           
@@ -331,7 +335,7 @@
               e('div', { className: 'mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg' },
                 e('h3', { className: 'font-semibold text-blue-900 mb-2' }, 'How This Works'),
                 e('div', { className: 'text-sm text-blue-800 space-y-2' },
-                  e('p', null, e('strong', null, 'Step 1: '), 'Calculate statutory deductions: NSSF (6% capped at KES 4,320 for salaries ≥72K), SHA (2.75%), Housing Levy (1.5%) on gross salary'),
+                  e('p', null, e('strong', null, 'Step 1: '), 'Calculate statutory deductions: NSSF (6% of gross, capped at KES 6,480 for salaries ≥108K), SHA (2.75%), Housing Levy (1.5%) on gross salary'),
                   e('p', null, e('strong', null, 'Step 2: '), 'Calculate Taxable Pay = Gross - NSSF - SHA - Housing Levy (transport is PART of taxable pay)'),
                   e('p', null, e('strong', null, 'Step 3: '), 'Calculate PAYE on Taxable Pay using tax bands: 10% (1-24K), 25% (24-32K), 30% (32K+)'),
                   e('p', null, e('strong', null, 'Step 4: '), 'Apply personal relief of KES 2,400 to reduce PAYE'),
