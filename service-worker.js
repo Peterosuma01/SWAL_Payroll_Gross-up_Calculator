@@ -1,4 +1,4 @@
-const CACHE_NAME = 'swal-payroll-v1';
+const CACHE_NAME = 'swal-payroll-v2';
 const urlsToCache = [
   '/swal-payroll-calculator/',
   '/swal-payroll-calculator/index.html',
